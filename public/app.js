@@ -6,7 +6,7 @@ const loginPassword = '0310';
 
 async function api(path, options) { const r = await fetch(path, options); if (!r.ok) throw new Error((await r.json()).error || 'Something went wrong'); return r.json(); }
 function money(n) { return new Intl.NumberFormat('ms-MY', { style: 'currency', currency: 'MYR' }).format(n); }
-function moneyINR(n) { const inrAmount = n * 20; return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(inrAmount); }
+function moneyINR(n) { const inrAmount = n * 22.75; return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(inrAmount); }
 function toast(message) { const el = $('#toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3200); }
 function lockDashboard() {
   document.querySelectorAll('main .page').forEach(page => page.classList.add('hidden'));
