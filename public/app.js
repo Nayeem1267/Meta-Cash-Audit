@@ -6,6 +6,7 @@ const loginPassword = '0310';
 
 async function api(path, options) { const r = await fetch(path, options); if (!r.ok) throw new Error((await r.json()).error || 'Something went wrong'); return r.json(); }
 function money(n) { return new Intl.NumberFormat('ms-MY', { style: 'currency', currency: 'MYR' }).format(n); }
+function moneyINR(n) { const inrAmount = n * 20; return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(inrAmount); }
 function toast(message) { const el = $('#toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3200); }
 function lockDashboard() {
   document.querySelectorAll('main .page').forEach(page => page.classList.add('hidden'));
@@ -42,7 +43,8 @@ function render() {
   $('#employeeCount').textContent = String(data.employees.length);
   $('#employeeRows').innerHTML = data.employees.map((e) => {
     const computedNet = Number(e.net ?? Math.max(0, Number(e.gross || 0) - Number(e.deduction || 0)));
-    return `<tr><td>${e.name}<small>${e.id} · ${e.role}</small></td><td>${e.team}</td><td>${money(computedNet)}</td><td><span class="badge ${e.status === 'Pending review' || e.status === 'Needs correction' ? 'pending' : ''}">${e.status}</span></td><td><div class="row-actions"><button class="outline review-record" data-id="${e.id}">Review</button><button class="outline download-slip" data-id="${e.id}">Download slip</button><button class="outline danger delete-employee" data-id="${e.id}">Delete</button></div></td></tr>`;
+    const inrValue = moneyINR(computedNet);
+    return `<tr><td>${e.name}<small>${e.id} · ${e.role}</small></td><td>${e.team}</td><td>${money(computedNet)}<br><small style="color:#9aa6a0">${inrValue}</small></td><td><span class="badge ${e.status === 'Pending review' || e.status === 'Needs correction' ? 'pending' : ''}">${e.status}</span></td><td><div class="row-actions"><button class="outline review-record" data-id="${e.id}">Review</button><button class="outline download-slip" data-id="${e.id}">Download slip</button><button class="outline danger delete-employee" data-id="${e.id}">Delete</button></div></td></tr>`;
   }).join('');
   $('#payoutEmployee').innerHTML = data.employees.map(e => `<option value="${e.id}">${e.name} (${e.id})</option>`).join('');
   $('#auditList').innerHTML = data.audits.slice(0, 4).map(a => `<div class="activity-item"><span class="act-icon">✓</span><div><b>${a.action}</b><small>${a.actor} · ${a.at} · ${a.ref}</small></div></div>`).join('');
