@@ -1,8 +1,39 @@
 const $ = (q) => document.querySelector(q);
 let data = { employees: [], audits: [], payments: [] };
+let isLoggedIn = false;
+const loginUser = 'Metapay';
+const loginPassword = '0310';
+
 async function api(path, options) { const r = await fetch(path, options); if (!r.ok) throw new Error((await r.json()).error || 'Something went wrong'); return r.json(); }
 function money(n) { return new Intl.NumberFormat('ms-MY', { style: 'currency', currency: 'MYR' }).format(n); }
 function toast(message) { const el = $('#toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3200); }
+function lockDashboard() {
+  document.querySelectorAll('main .page').forEach(page => page.classList.add('hidden'));
+  $('#overview').classList.add('hidden');
+  $('#loginScreen').classList.remove('hidden');
+  $('.app-shell').classList.add('hidden');
+  $('#settingsLink').style.display = 'none';
+}
+function unlockDashboard() {
+  isLoggedIn = true;
+  updateLoginState();
+  $('#loginScreen').classList.add('hidden');
+  $('.app-shell').classList.remove('hidden');
+  $('#overview').classList.remove('hidden');
+  showPage('overview');
+  $('#settingsLink').style.display = 'flex';
+}
+function updateGreeting() {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  $('#greetingTitle').textContent = `${greeting}, Asmira.`;
+}
+function updateLoginState() {
+  const settingsLink = $('#settingsLink');
+  if (!settingsLink) return;
+  settingsLink.innerHTML = isLoggedIn ? '↩ <span>Logout</span>' : '⇅ <span>Login</span>';
+  settingsLink.setAttribute('href', isLoggedIn ? '#logout' : '#login');
+}
 function render() {
   const review = data.payrollReview || { status: 'Ready for final review', decision: null };
   const statusText = review.decision === 'approved' ? 'Approved & scheduled' : review.decision === 'returned' ? 'Returned for correction' : 'Ready for final review';
@@ -104,8 +135,11 @@ async function deleteEmployee(employeeId) {
 }
 async function load() { data = await api('/api/dashboard'); render(); }
 function showPage(id) { document.querySelectorAll('main .page').forEach(p => p.classList.add('hidden')); $(`#${id}`).classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
-document.querySelectorAll('nav a').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const target = a.getAttribute('href').slice(1); document.querySelectorAll('nav a').forEach(n => n.classList.remove('active')); a.classList.add('active'); if (['payroll', 'people', 'audit'].includes(target)) { showPage('overview'); setTimeout(() => $(`#${target}`).scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); return; } if (target === 'settings') { toast('Settings are managed by your organization administrator in this demo.'); return; } showPage(target); }));
-$('#reviewBtn').onclick = () => $('#reviewDialog').showModal();
+document.querySelectorAll('nav a').forEach(a => a.addEventListener('click', e => { e.preventDefault(); if (!isLoggedIn) { $('#loginPage').classList.remove('hidden'); return; } const target = a.getAttribute('href').slice(1); document.querySelectorAll('nav a').forEach(n => n.classList.remove('active')); a.classList.add('active'); if (['payroll', 'people', 'audit'].includes(target)) { showPage('overview'); setTimeout(() => $(`#${target}`).scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); return; } if (target === 'settings' || target === 'login') { $('#loginPage').classList.remove('hidden'); return; } if (target === 'logout') { isLoggedIn = false; updateLoginState(); lockDashboard(); toast('Logged out.'); return; } showPage(target); }));
+$('#settingsLink').addEventListener('click', e => { e.preventDefault(); if (isLoggedIn) { isLoggedIn = false; updateLoginState(); lockDashboard(); toast('Logged out.'); return; } $('#loginPage').classList.remove('hidden'); });
+$('#loginFormPage').addEventListener('submit', e => { e.preventDefault(); const username = $('#loginUserPage').value.trim(); const password = $('#loginPasswordPage').value.trim(); if (username === loginUser && password === loginPassword) { unlockDashboard(); e.target.reset(); toast('Logged in successfully.'); return; } toast('Invalid username or password.'); });
+$('#loginForm').addEventListener('submit', e => { e.preventDefault(); const username = $('#loginUser').value.trim(); const password = $('#loginPassword').value.trim(); if (username === loginUser && password === loginPassword) { unlockDashboard(); e.target.reset(); toast('Logged in successfully.'); return; } toast('Invalid username or password.'); });
+$('#reviewBtn').onclick = () => { if (!isLoggedIn) { $('#loginPage').classList.remove('hidden'); return; } $('#reviewDialog').showModal(); };
 $('#reviewPayrollLink').onclick = () => $('#reviewDialog').showModal();
 function calculationEntries() { const saved = new Map((data.payrollEntries || []).map(row => [row.employeeId, row])); return data.employees.map(employee => ({ employeeId: employee.id, gross: saved.get(employee.id)?.gross ?? employee.gross, bonus: saved.get(employee.id)?.bonus ?? 0, deductions: saved.get(employee.id)?.deductions ?? 0 })); }
 function refreshCalculation() { const entries = [...$('#calculationRows').querySelectorAll('tr')]; let total = 0; entries.forEach(row => { const values = [...row.querySelectorAll('input')].map(input => Number(input.value) || 0); const net = Math.max(0, values[0] + values[1] - values[2]); row.querySelector('.calc-net').textContent = money(net); total += net; }); $('#calculationTotal').textContent = money(total); }
@@ -145,4 +179,7 @@ $('#downloadSlip').onclick = () => {
   }
   downloadEmployeePayslip(data.employees[0].id);
 };
+updateGreeting();
+updateLoginState();
+lockDashboard();
 load().catch(() => toast('Could not load the demo API.'));

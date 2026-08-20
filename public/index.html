@@ -1,13 +1,30 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>MetaPay | Payroll operations</title><link rel="stylesheet" href="styles.css"></head>
 <body>
+  <section id="loginScreen" class="login-screen hidden">
+    <div class="login-card">
+      <p class="eyebrow">SECURE ACCESS</p>
+      <h1>MetaPay Login</h1>
+      <p class="sub">Sign in to access the payroll workspace.</p>
+      <form id="loginFormPage" novalidate>
+        <label>Username
+          <input id="loginUserPage" type="text" required autocomplete="username" placeholder="Metapay">
+        </label>
+        <label>Password
+          <input id="loginPasswordPage" type="password" required autocomplete="current-password" placeholder="0310">
+        </label>
+        <button class="primary" type="submit">Login</button>
+      </form>
+    </div>
+  </section>
+
   <div class="app-shell">
     <aside class="sidebar"><div class="brand"><span class="brand-mark">∞</span><span>metapay</span></div><div class="workspace">META PLATFORMS<br><small>Payroll workspace</small></div>
       <nav><a class="active" href="#overview">▦ <span>Overview</span></a><a href="#payroll">◫ <span>Run payroll</span></a><a href="#people">♙ <span>People</span></a><a href="#payslips">▤ <span>Payslips</span></a><a href="#payments">⇄ <span>Payments</span></a><a href="#audit">◷ <span>Audit log</span></a></nav>
-      <div class="side-bottom"><a href="#settings">⚙ <span>Settings</span></a><div class="profile"><b>AA</b><div><strong>Asmira Admin</strong><small>Payroll administrator</small></div><span>⌄</span></div></div>
+      <div class="side-bottom"><a href="#settings" id="settingsLink">⇅ <span>Login</span></a><div class="profile"><b>AA</b><div><strong>Asmira Admin</strong><small>Payroll administrator</small></div><span>⌄</span></div></div>
     </aside>
-    <main><header><button class="menu" aria-label="Open menu">☰</button><div class="crumb">Workspace <span>/</span> Overview</div><div class="header-actions"><button class="icon-btn" title="Notifications">♧<i></i></button><button class="help">?</button><button class="avatar">AA</button></div></header>
-      <section id="overview" class="page"><div class="hero"><div><p class="eyebrow">AUGUST 2026 PAYROLL</p><h1>Good morning, Asmira.</h1><p class="sub">Your payroll is ready for final review.</p></div><button class="primary" id="reviewBtn">Final review <span>→</span></button></div>
+    <main><header class="app-header"><button class="menu" aria-label="Open menu">☰</button><div class="crumb">Workspace <span>/</span> Overview</div><div class="header-actions"><button class="icon-btn" title="Notifications">♧<i></i></button><button class="help">?</button><button class="avatar">AA</button></div></header>
+      <section id="overview" class="page hidden"><div class="hero"><div><p class="eyebrow">AUGUST 2026 PAYROLL</p><h1 id="greetingTitle">Good morning, Asmira.</h1><p class="sub">Your payroll is ready for final review.</p></div><button class="primary" id="reviewBtn">Final review <span>→</span></button></div>
         <div class="notice"><span class="notice-icon">✓</span><div><b>Secure payment rail configured</b><p>Employees receive funds through their verified wallet or licensed cash-out partner. <a href="#payments">View payment settings</a></p></div><span class="tag">SANDBOX</span></div>
         <div class="metric-grid"><article><p>PAYROLL TOTAL</p><h2>RM2,000,000<span>.00</span></h2><small><em>↑ 4.8%</em> from last month</small></article><article><p>EMPLOYEES</p><h2 id="employeeCount">248</h2><small><em>↑ 6</em> added this month</small></article><article><p>ESTIMATED PAY DATE</p><h2>Aug 30</h2><small>10 days from now</small></article><article><p>PAYROLL STATUS</p><h2 class="status-text" id="payrollStatus">Ready to review</h2><small id="payrollStatusNote">2 items need attention</small></article></div>
         <div class="dashboard-grid"><section class="panel payroll-card" id="payroll"><div class="panel-head"><div><p class="eyebrow">CURRENT PAY RUN</p><h3>August 2026</h3></div><button class="outline" id="openPayroll">Open calculation</button></div><div class="pay-progress"><div><span id="payProgressStatus">Review &amp; approve</span><b id="payProgressCount">2 of 3 complete</b></div><div class="track"><i></i></div></div><div class="run-steps"><div class="step done"><span>✓</span><div><b>Payroll calculated</b><small>Enter or adjust salary, bonuses, and deductions</small></div></div><div class="step current" id="payStepReview"><span>2</span><div><b>Review &amp; approve</b><small>Open the review decision and approve or return this pay run</small></div><button class="text-action" id="reviewPayrollLink" type="button">Review</button></div><div class="step" id="payStepApprove"><span>3</span><div><b>Approve &amp; schedule</b><small>Approved payroll is scheduled in sandbox mode</small></div></div></div></section>
@@ -24,4 +41,5 @@
   <dialog id="payrollDialog"><form method="dialog" id="calculationForm"><button class="close" value="cancel">×</button><p class="eyebrow">MANUAL PAYROLL CALCULATION</p><h2>August 2026 calculation</h2><p class="sub">Enter monthly gross pay, bonuses, and deductions. Net pay is calculated before approval.</p><div class="calc-table"><table><thead><tr><th>EMPLOYEE</th><th>GROSS (RM)</th><th>BONUS</th><th>DEDUCTIONS</th><th>NET PAY</th></tr></thead><tbody id="calculationRows"></tbody></table></div><div class="calc-total">Calculated net payroll <b id="calculationTotal">RM0.00</b></div><button class="primary" value="default">Save calculation</button></form></dialog>
   <dialog id="linkDialog"><form method="dialog" id="linkForm"><button class="close" value="cancel">×</button><p class="eyebrow">SPREADSHEET LINK IMPORT</p><h2>Import employee names</h2><p class="sub">Paste a public CSV link or a Google Sheet “Publish to web” CSV link. The sheet needs a <b>Name</b> column; Role, Team, Monthly Gross, and Payment Route are optional.</p><label>Public spreadsheet link<input id="spreadsheetLink" type="url" required placeholder="https://…"></label><button class="primary" value="default">Import from link</button></form></dialog>
   <dialog id="employeeReviewDialog"><form method="dialog" id="employeeReviewForm"><button class="close" value="cancel">×</button><p class="eyebrow">EMPLOYEE REVIEW</p><h2 id="reviewEmployeeName">Review employee</h2><p class="sub">Approve this employee record for payroll, or return it for correction.</p><div class="decision-actions"><button class="outline" value="cancel" id="returnEmployee">Return for correction</button><button class="primary" value="default">Approve employee</button></div></form></dialog>
+  <dialog id="loginDialog"><form method="dialog" id="loginForm"><button class="close" value="cancel">×</button><p class="eyebrow">SECURE ACCESS</p><h2>Login</h2><label>Username<input id="loginUser" required placeholder="Metapay"></label><label>Password<input id="loginPassword" type="password" required placeholder="0310"></label><button class="primary" value="default">Continue</button></form></dialog>
   <div id="toast"></div><script src="app.js"></script></body></html>
