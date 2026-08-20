@@ -39,6 +39,14 @@ const server = http.createServer(async (req, res) => {
     const added = rows.filter(row => row.name).map((row, index) => ({ id: `EMP-${1104 + state.employees.length + index}`, name: String(row.name).slice(0, 120), role: String(row.role || 'Team member').slice(0, 120), team: String(row.team || 'Operations').slice(0, 80), method: row.method === 'Cash-out' ? 'Cash-out' : 'Wallet', status: 'Pending review', gross: Math.max(0, Number(row.gross) || 0) }));
     state.employees.push(...added); audit('Asmira Admin', `Imported ${added.length} employee record${added.length === 1 ? '' : 's'}`, 'EMPLOYEE-IMPORT'); return json(res, 201, { added: added.length, employees: added });
   }
+  const employeeReviewMatch = url.pathname.match(/^\/api\/employees\/([^/]+)\/review$/);
+  if (employeeReviewMatch && req.method === 'POST') {
+    const body = await readBody(req); const employee = state.employees.find(item => item.id === decodeURIComponent(employeeReviewMatch[1]));
+    if (!employee) return json(res, 404, { error: 'Employee not found' });
+    const approved = body.decision === 'approved'; employee.status = approved ? 'Approved' : 'Needs correction';
+    audit('Asmira Admin', approved ? 'Approved employee record' : 'Returned employee record for correction', employee.id);
+    return json(res, 200, employee);
+  }
   if (url.pathname === '/api/payroll/review' && req.method === 'POST') {
     const body = await readBody(req); const approved = body.decision === 'approved';
     state.payrollReview = { status: approved ? 'Approved & scheduled' : 'Returned for correction', decision: approved ? 'approved' : 'returned' };

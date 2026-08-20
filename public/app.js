@@ -5,7 +5,8 @@ function money(n) { return new Intl.NumberFormat('ms-MY', { style: 'currency', c
 function toast(message) { const el = $('#toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3200); }
 function render() {
   const review = data.payrollReview || { status: 'Ready to review' }; $('#payrollStatus').textContent = review.status; $('#payrollStatusNote').textContent = review.decision === 'approved' ? 'Sandbox pay run is scheduled' : review.decision === 'returned' ? 'Changes are required before approval' : '2 items need attention';
-  $('#employeeRows').innerHTML = data.employees.map(e => `<tr><td>${e.name}<small>${e.id} · ${e.role}</small></td><td>${e.team}</td><td><span class="route">${e.method}</span></td><td>${money(e.gross)}</td><td><span class="badge ${e.status === 'Pending review' ? 'pending' : ''}">${e.status}</span></td><td class="more">•••</td></tr>`).join('');
+  $('#employeeRows').innerHTML = data.employees.map(e => `<tr><td>${e.name}<small>${e.id} · ${e.role}</small></td><td>${e.team}</td><td>${money(e.gross)}</td><td><span class="badge ${e.status === 'Pending review' || e.status === 'Needs correction' ? 'pending' : ''}">${e.status}</span></td><td><button class="outline review-record" data-id="${e.id}">Review</button></td></tr>`).join('');
+  document.querySelectorAll('.review-record').forEach(button => button.addEventListener('click', () => openEmployeeReview(button.dataset.id)));
   $('#payoutEmployee').innerHTML = data.employees.map(e => `<option value="${e.id}">${e.name} (${e.id})</option>`).join('');
   $('#auditList').innerHTML = data.audits.slice(0, 4).map(a => `<div class="activity-item"><span class="act-icon">✓</span><div><b>${a.action}</b><small>${a.actor} · ${a.at} · ${a.ref}</small></div></div>`).join('');
   $('#paymentList').className = data.payments.length ? '' : 'empty';
@@ -26,6 +27,11 @@ $('#returnPayroll').addEventListener('click', e => { e.preventDefault(); decideP
 $('#addEmployee').onclick = () => $('#employeeDialog').showModal();
 $('#importEmployees').onclick = () => $('#importDialog').showModal();
 $('#importLink').onclick = () => $('#linkDialog').showModal();
+let reviewEmployeeId = null;
+function openEmployeeReview(employeeId) { const employee = data.employees.find(item => item.id === employeeId); if (!employee) return; reviewEmployeeId = employeeId; $('#reviewEmployeeName').textContent = `Review ${employee.name}`; $('#employeeReviewDialog').showModal(); }
+async function decideEmployee(decision) { try { const employee = await api(`/api/employees/${encodeURIComponent(reviewEmployeeId)}/review`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ decision }) }); const index = data.employees.findIndex(item => item.id === employee.id); data.employees[index] = employee; data.audits.unshift({at:'Just now',actor:'Asmira Admin',action:decision === 'approved' ? 'Approved employee record' : 'Returned employee record for correction',ref:employee.id}); render(); $('#employeeReviewDialog').close(); toast(decision === 'approved' ? `${employee.name} approved for payroll.` : `${employee.name} returned for correction.`); } catch (err) { toast(err.message); } }
+$('#employeeReviewForm').addEventListener('submit', e => { e.preventDefault(); decideEmployee('approved'); });
+$('#returnEmployee').addEventListener('click', e => { e.preventDefault(); decideEmployee('returned'); });
 $('#newPayout').onclick = () => $('#payoutDialog').showModal();
 $('#employeeForm').addEventListener('submit', async e => { e.preventDefault(); try { await api('/api/employees', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:$('#employeeName').value,role:$('#employeeRole').value,team:$('#employeeTeam').value,gross:$('#employeeGross').value}) }); $('#employeeDialog').close(); e.target.reset(); await load(); toast('Employee created and marked for payment-route review.'); } catch(err) { toast(err.message); } });
 async function readWorkbook(file) {
