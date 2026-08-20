@@ -1,8 +1,8 @@
 const $ = (q) => document.querySelector(q);
 let data = { employees: [], audits: [], payments: [] };
 let isLoggedIn = false;
-const loginUser = 'admin';
-const loginPassword = '123';
+const loginUser = 'Asmira';
+const loginPassword = '0310';
 
 async function api(path, options) { const r = await fetch(path, options); if (!r.ok) throw new Error((await r.json()).error || 'Something went wrong'); return r.json(); }
 function money(n) { return new Intl.NumberFormat('ms-MY', { style: 'currency', currency: 'MYR' }).format(n); }
