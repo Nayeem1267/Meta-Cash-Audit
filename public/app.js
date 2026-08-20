@@ -58,20 +58,80 @@ function payslipContent(employee) {
   const gross = Number(employee.gross || 0);
   const deductions = Number(employee.deduction ?? Math.round(gross * 0.18));
   const net = Number(employee.net ?? Math.max(0, gross - deductions));
-  return `Meta Platforms — Payslip\nAugust 2026\n\nEmployee: ${employee.name} (${employee.id})\nRole: ${employee.role}\nTeam: ${employee.team}\nGross pay: ${money(gross)}\nDeductions: ${money(deductions)}\nNet pay: ${money(net)}\nPay date: August 30, 2026\nPayout route: ${employee.method || 'Wallet'}`;
+  return { gross, deductions, net };
 }
 
 function downloadEmployeePayslip(employeeId) {
   const employee = data.employees.find(item => item.id === employeeId);
   if (!employee) return;
-  const content = payslipContent(employee);
-  const fileName = `${employee.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'employee'}-payslip-2026-08.txt`;
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(a.href);
-  toast(`Payslip downloaded for ${employee.name}.`);
+  const { gross, deductions, net } = payslipContent(employee);
+  const fileName = `${employee.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'employee'}-payslip-2026-08.pdf`;
+  
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px; background: white;">
+      <div style="text-align: center; border-bottom: 2px solid #333; padding-bottom: 20px; margin-bottom: 30px;">
+        <h1 style="margin: 0; color: #333; font-size: 28px;">META PLATFORMS</h1>
+        <p style="margin: 5px 0; color: #666; font-size: 14px;">PAYSLIP</p>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; font-size: 13px;">
+        <div>
+          <p style="margin: 0 0 5px 0; color: #999; font-size: 11px; text-transform: uppercase;">Employee</p>
+          <p style="margin: 0 0 15px 0; font-weight: bold; font-size: 16px;">${employee.name}</p>
+          <p style="margin: 0 0 5px 0; color: #999; font-size: 11px; text-transform: uppercase;">Employee ID</p>
+          <p style="margin: 0 0 15px 0;">${employee.id}</p>
+          <p style="margin: 0 0 5px 0; color: #999; font-size: 11px; text-transform: uppercase;">Role</p>
+          <p style="margin: 0 0 15px 0;">${employee.role}</p>
+        </div>
+        <div>
+          <p style="margin: 0 0 5px 0; color: #999; font-size: 11px; text-transform: uppercase;">Department</p>
+          <p style="margin: 0 0 15px 0;">${employee.team}</p>
+          <p style="margin: 0 0 5px 0; color: #999; font-size: 11px; text-transform: uppercase;">Pay Period</p>
+          <p style="margin: 0 0 15px 0;">August 2026</p>
+          <p style="margin: 0 0 5px 0; color: #999; font-size: 11px; text-transform: uppercase;">Pay Date</p>
+          <p style="margin: 0;">August 30, 2026</p>
+        </div>
+      </div>
+      <div style="border-top: 1px solid #ddd; border-bottom: 2px solid #333; padding: 20px 0; margin-bottom: 20px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Gross Pay</td>
+            <td style="text-align: right; padding: 8px 0; font-weight: bold;">${money(gross)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666;">Deductions</td>
+            <td style="text-align: right; padding: 8px 0; font-weight: bold; color: #d32f2f;">-${money(deductions)}</td>
+          </tr>
+          <tr style="border-top: 1px solid #ddd;">
+            <td style="padding: 12px 0; font-size: 16px; font-weight: bold;">Net Pay</td>
+            <td style="text-align: right; padding: 12px 0; font-size: 16px; font-weight: bold; color: #1976d2;">${money(net)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #666; font-size: 12px;">Equivalent (INR)</td>
+            <td style="text-align: right; padding: 8px 0; font-size: 12px; color: #666;">${moneyINR(net)}</td>
+          </tr>
+        </table>
+      </div>
+      <div style="font-size: 12px; color: #666; line-height: 1.6;">
+        <p><strong>Payment Method:</strong> ${employee.method || 'Wallet'}</p>
+        <p><strong>Status:</strong> <span style="display: inline-block; padding: 3px 8px; background: ${employee.status === 'Approved' ? '#4caf50' : '#ff9800'}; color: white; border-radius: 3px; font-size: 11px;">${employee.status}</span></p>
+      </div>
+      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 11px; color: #999;">
+        <p>This is a computer-generated payslip. No signature is required.</p>
+        <p>Confidential - For employee records only</p>
+      </div>
+    </div>
+  `;
+  
+  const opt = {
+    margin: 10,
+    filename: fileName,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+  };
+  
+  html2pdf().set(opt).from(htmlContent).save();
+  toast(`Payslip PDF downloaded for ${employee.name}.`);
 }
 
 function renderPayrollProgress() {
@@ -147,7 +207,8 @@ $('#loginForm').addEventListener('submit', e => { e.preventDefault(); const user
 $('#reviewBtn').onclick = () => { if (!isLoggedIn) { $('#loginPage').classList.remove('hidden'); return; } $('#reviewDialog').showModal(); };
 $('#reviewPayrollLink').onclick = () => $('#reviewDialog').showModal();
 function calculationEntries() { const saved = new Map((data.payrollEntries || []).map(row => [row.employeeId, row])); return data.employees.map(employee => ({ employeeId: employee.id, gross: saved.get(employee.id)?.gross ?? employee.gross ?? 0, bonus: saved.get(employee.id)?.bonus ?? 0, deductions: saved.get(employee.id)?.deductions ?? employee.deduction ?? 0 })); }
-function refreshCalculation() { const entries = [...$('#calculationRows').querySelectorAll('tr')]; let total = 0; entries.forEach(row => { const values = [...row.querySelectorAll('input')].map(input => Number(input.value) || 0); const net = Math.max(0, values[0] + values[1] - values[2]); row.querySelector('.calc-net').textContent = money(net); total += net; }); $('#calculationTotal').textContent = money(total); }
+function getApprovedDeductionsTotal() { return data.employees.filter(e => e.status === 'Approved').reduce((sum, e) => sum + (Number(e.net) || 0), 0); }
+function refreshCalculation() { const entries = [...$('#calculationRows').querySelectorAll('tr')]; let total = 0; let approvedDeductions = 0; entries.forEach(row => { const values = [...row.querySelectorAll('input')].map(input => Number(input.value) || 0); const net = Math.max(0, values[0] + values[1] - values[2]); row.querySelector('.calc-net').textContent = money(net); total += net; }); const approvedTotal = getApprovedDeductionsTotal(); const remainingTotal = Math.max(0, total - approvedTotal); $('#calculationTotal').textContent = money(total); $('#approvedDeductionsTotal').textContent = money(approvedTotal); $('#remainingPayrollTotal').textContent = money(remainingTotal); }
 function openCalculation() { const entries = calculationEntries(); $('#calculationRows').innerHTML = entries.map(row => { const employee = data.employees.find(item => item.id === row.employeeId); return `<tr data-id="${row.employeeId}"><td>${employee?.name || row.employeeId}</td><td><input type="number" min="0" value="${row.gross}"></td><td><input type="number" min="0" value="${row.bonus}"></td><td><input type="number" min="0" value="${row.deductions}"></td><td class="calc-net"></td></tr>`; }).join(''); $('#calculationRows').querySelectorAll('input').forEach(input => input.addEventListener('input', refreshCalculation)); refreshCalculation(); $('#payrollDialog').showModal(); }
 $('#openPayroll').onclick = openCalculation;
 $('#calculationForm').addEventListener('submit', async e => { e.preventDefault(); try { const entries = [...$('#calculationRows').querySelectorAll('tr')].map(row => { const [gross, bonus, deductions] = [...row.querySelectorAll('input')].map(input => Number(input.value) || 0); return { employeeId: row.dataset.id, gross, bonus, deductions }; }); const result = await api('/api/payroll/calculate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ entries }) }); data.payrollEntries = result.entries; data.payrollReview = { status:'Ready to review', decision:null }; data.employees = data.employees.map(employee => { const entry = result.entries.find(item => item.employeeId === employee.id); if (!entry) return employee; const net = Math.max(0, Number(entry.gross || 0) + Number(entry.bonus || 0) - Number(entry.deductions || 0)); return { ...employee, gross: Number(entry.gross || 0), deduction: Number(entry.deductions || 0), net }; }); data.audits.unshift({at:'Just now',actor:'Asmira Admin',action:'Updated manual payroll calculation',ref:'PAY-2026-08'}); render(); $('#payrollDialog').close(); toast(`Calculation saved: ${money(result.total)} net payroll. You can now approve it.`); } catch (err) { toast(err.message); } });
