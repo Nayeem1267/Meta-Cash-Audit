@@ -4,6 +4,7 @@ async function api(path, options) { const r = await fetch(path, options); if (!r
 function money(n) { return new Intl.NumberFormat('ms-MY', { style: 'currency', currency: 'MYR' }).format(n); }
 function toast(message) { const el = $('#toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3200); }
 function render() {
+  const review = data.payrollReview || { status: 'Ready to review' }; $('#payrollStatus').textContent = review.status; $('#payrollStatusNote').textContent = review.decision === 'approved' ? 'Sandbox pay run is scheduled' : review.decision === 'returned' ? 'Changes are required before approval' : '2 items need attention';
   $('#employeeRows').innerHTML = data.employees.map(e => `<tr><td>${e.name}<small>${e.id} · ${e.role}</small></td><td>${e.team}</td><td><span class="route">${e.method}</span></td><td>${money(e.gross)}</td><td><span class="badge ${e.status === 'Pending review' ? 'pending' : ''}">${e.status}</span></td><td class="more">•••</td></tr>`).join('');
   $('#payoutEmployee').innerHTML = data.employees.map(e => `<option value="${e.id}">${e.name} (${e.id})</option>`).join('');
   $('#auditList').innerHTML = data.audits.slice(0, 4).map(a => `<div class="activity-item"><span class="act-icon">✓</span><div><b>${a.action}</b><small>${a.actor} · ${a.at} · ${a.ref}</small></div></div>`).join('');
@@ -13,8 +14,11 @@ function render() {
 async function load() { data = await api('/api/dashboard'); render(); }
 function showPage(id) { document.querySelectorAll('main .page').forEach(p => p.classList.add('hidden')); $(`#${id}`).classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 document.querySelectorAll('nav a').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const target = a.getAttribute('href').slice(1); document.querySelectorAll('nav a').forEach(n => n.classList.remove('active')); a.classList.add('active'); if (['payroll', 'people', 'audit'].includes(target)) { showPage('overview'); setTimeout(() => $(`#${target}`).scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); return; } if (target === 'settings') { toast('Settings are managed by your organization administrator in this demo.'); return; } showPage(target); }));
-$('#reviewBtn').onclick = () => { showPage('payroll'); toast('Payroll review is ready. Resolve the two pending employee records.'); };
+$('#reviewBtn').onclick = () => $('#reviewDialog').showModal();
 $('#openPayroll').onclick = () => toast('August payroll calculation is locked and ready for approval in this demo.');
+async function decidePayroll(decision) { try { const review = await api('/api/payroll/review', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ decision }) }); data.payrollReview = review; data.audits.unshift({ at:'Just now', actor:'Asmira Admin', action: decision === 'approved' ? 'Approved August payroll' : 'Returned August payroll for correction', ref:'PAY-2026-08' }); render(); $('#reviewDialog').close(); toast(decision === 'approved' ? 'Payroll approved and scheduled in sandbox mode.' : 'Payroll returned for correction.'); } catch (err) { toast(err.message); } }
+$('#reviewForm').addEventListener('submit', e => { e.preventDefault(); decidePayroll('approved'); });
+$('#returnPayroll').addEventListener('click', e => { e.preventDefault(); decidePayroll('returned'); });
 $('#addEmployee').onclick = () => $('#employeeDialog').showModal();
 $('#importEmployees').onclick = () => $('#importDialog').showModal();
 $('#newPayout').onclick = () => $('#payoutDialog').showModal();

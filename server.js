@@ -6,6 +6,7 @@ const root = path.join(__dirname, 'public');
 const port = process.env.PORT || 3000;
 const state = {
   company: 'Meta Platforms',
+  payrollReview: { status: 'Ready to review', decision: null },
   employees: [
     { id: 'EMP-1042', name: 'Alicia Reyes', role: 'Product Designer', team: 'Design', method: 'Wallet', status: 'Active', gross: 9400 },
     { id: 'EMP-1018', name: 'Marcus Chen', role: 'Software Engineer', team: 'Engineering', method: 'Wallet', status: 'Active', gross: 12800 },
@@ -27,7 +28,7 @@ function audit(actor, action, ref) { state.audits.unshift({ at: new Date().toLoc
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
   if (url.pathname === '/api/health') return json(res, 200, { status: 'ok', environment: process.env.PAYMENT_MODE || 'sandbox' });
-  if (url.pathname === '/api/dashboard') return json(res, 200, { company: state.company, employees: state.employees, audits: state.audits, payments: state.payments });
+  if (url.pathname === '/api/dashboard') return json(res, 200, { company: state.company, employees: state.employees, audits: state.audits, payments: state.payments, payrollReview: state.payrollReview });
   if (url.pathname === '/api/employees' && req.method === 'POST') {
     const body = await readBody(req); const employee = { id: `EMP-${1104 + state.employees.length}`, name: body.name || 'New employee', role: body.role || 'Team member', team: body.team || 'Operations', method: body.method || 'Wallet', status: 'Pending review', gross: Number(body.gross) || 0 };
     state.employees.push(employee); audit('Asmira Admin', 'Created employee record', employee.id); return json(res, 201, employee);
@@ -36,6 +37,12 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req); const rows = Array.isArray(body.employees) ? body.employees.slice(0, 500) : [];
     const added = rows.filter(row => row.name).map((row, index) => ({ id: `EMP-${1104 + state.employees.length + index}`, name: String(row.name).slice(0, 120), role: String(row.role || 'Team member').slice(0, 120), team: String(row.team || 'Operations').slice(0, 80), method: row.method === 'Cash-out' ? 'Cash-out' : 'Wallet', status: 'Pending review', gross: Math.max(0, Number(row.gross) || 0) }));
     state.employees.push(...added); audit('Asmira Admin', `Imported ${added.length} employee record${added.length === 1 ? '' : 's'}`, 'EMPLOYEE-IMPORT'); return json(res, 201, { added: added.length, employees: added });
+  }
+  if (url.pathname === '/api/payroll/review' && req.method === 'POST') {
+    const body = await readBody(req); const approved = body.decision === 'approved';
+    state.payrollReview = { status: approved ? 'Approved & scheduled' : 'Returned for correction', decision: approved ? 'approved' : 'returned' };
+    audit('Asmira Admin', approved ? 'Approved August payroll' : 'Returned August payroll for correction', 'PAY-2026-08');
+    return json(res, 200, state.payrollReview);
   }
   if (url.pathname === '/api/payouts' && req.method === 'POST') {
     const body = await readBody(req);
