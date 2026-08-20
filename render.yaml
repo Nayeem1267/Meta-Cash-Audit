@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: metapay-payroll-demo
+    name: metapay-payroll
     runtime: docker
     plan: free
     healthCheckPath: /api/health
