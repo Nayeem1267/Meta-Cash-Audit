@@ -4,13 +4,103 @@ async function api(path, options) { const r = await fetch(path, options); if (!r
 function money(n) { return new Intl.NumberFormat('ms-MY', { style: 'currency', currency: 'MYR' }).format(n); }
 function toast(message) { const el = $('#toast'); el.textContent = message; el.classList.add('show'); setTimeout(() => el.classList.remove('show'), 3200); }
 function render() {
-  const review = data.payrollReview || { status: 'Ready to review' }; $('#payrollStatus').textContent = review.status; $('#payrollStatusNote').textContent = review.decision === 'approved' ? 'Sandbox pay run is scheduled' : review.decision === 'returned' ? 'Changes are required before approval' : '2 items need attention';
-  $('#employeeRows').innerHTML = data.employees.map(e => `<tr><td>${e.name}<small>${e.id} · ${e.role}</small></td><td>${e.team}</td><td>${money(e.gross)}</td><td><span class="badge ${e.status === 'Pending review' || e.status === 'Needs correction' ? 'pending' : ''}">${e.status}</span></td><td><button class="outline review-record" data-id="${e.id}">Review</button></td></tr>`).join('');
-  document.querySelectorAll('.review-record').forEach(button => button.addEventListener('click', () => openEmployeeReview(button.dataset.id)));
+  const review = data.payrollReview || { status: 'Ready for final review', decision: null };
+  const statusText = review.decision === 'approved' ? 'Approved & scheduled' : review.decision === 'returned' ? 'Returned for correction' : 'Ready for final review';
+  $('#payrollStatus').textContent = statusText;
+  $('#payrollStatusNote').textContent = review.decision === 'approved' ? 'Sandbox pay run is scheduled' : review.decision === 'returned' ? 'Changes are required before approval' : 'Final review is ready';
+  $('#employeeCount').textContent = String(data.employees.length);
+  $('#employeeRows').innerHTML = data.employees.map(e => `<tr><td>${e.name}<small>${e.id} · ${e.role}</small></td><td>${e.team}</td><td>${money(e.gross)}</td><td><span class="badge ${e.status === 'Pending review' || e.status === 'Needs correction' ? 'pending' : ''}">${e.status}</span></td><td><div class="row-actions"><button class="outline review-record" data-id="${e.id}">Review</button><button class="outline download-slip" data-id="${e.id}">Download slip</button><button class="outline danger delete-employee" data-id="${e.id}">Delete</button></div></td></tr>`).join('');
   $('#payoutEmployee').innerHTML = data.employees.map(e => `<option value="${e.id}">${e.name} (${e.id})</option>`).join('');
   $('#auditList').innerHTML = data.audits.slice(0, 4).map(a => `<div class="activity-item"><span class="act-icon">✓</span><div><b>${a.action}</b><small>${a.actor} · ${a.at} · ${a.ref}</small></div></div>`).join('');
   $('#paymentList').className = data.payments.length ? '' : 'empty';
   $('#paymentList').innerHTML = data.payments.length ? data.payments.map(p => `<div class="transaction"><div><b>${p.id} · ${money(p.amount)}</b><p>${p.employeeId} · ${p.method} · ${p.provider}</p></div><span class="badge pending">${p.status}</span></div>`).join('') : 'No payouts created yet. Send a sandbox payout to see its status here.';
+  $('#payslipList').innerHTML = data.employees.length ? data.employees.map(employee => `<article class="panel payslip-item"><div><b>${employee.name}</b><small>${employee.id} · ${employee.team}</small></div><button class="outline download-slip" data-id="${employee.id}">Download payslip</button></article>`).join('') : '<div class="empty-state">No employees available for payslip export.</div>';
+  renderPayrollProgress();
+}
+
+function payslipContent(employee) {
+  const gross = Number(employee.gross || 0);
+  const deductions = Math.round(gross * 0.18);
+  const net = Math.max(0, gross - deductions);
+  return `Meta Platforms — Payslip\nAugust 2026\n\nEmployee: ${employee.name} (${employee.id})\nRole: ${employee.role}\nTeam: ${employee.team}\nGross pay: ${money(gross)}\nDeductions: ${money(deductions)}\nNet pay: ${money(net)}\nPay date: August 30, 2026\nPayout route: ${employee.method || 'Wallet'}`;
+}
+
+function downloadEmployeePayslip(employeeId) {
+  const employee = data.employees.find(item => item.id === employeeId);
+  if (!employee) return;
+  const content = payslipContent(employee);
+  const fileName = `${employee.name.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'employee'}-payslip-2026-08.txt`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast(`Payslip downloaded for ${employee.name}.`);
+}
+
+function renderPayrollProgress() {
+  const review = data.payrollReview || { decision: null };
+  const reviewStep = document.getElementById('payStepReview');
+  const approveStep = document.getElementById('payStepApprove');
+  const payProgressStatus = document.getElementById('payProgressStatus');
+  const payProgressCount = document.getElementById('payProgressCount');
+  const hasEntries = (data.payrollEntries || []).length > 0;
+  const isApproved = review.decision === 'approved';
+  const isReturned = review.decision === 'returned';
+
+  if (reviewStep) {
+    reviewStep.classList.toggle('done', isApproved || isReturned || hasEntries);
+    reviewStep.classList.toggle('current', !isApproved && !isReturned && hasEntries);
+  }
+
+  if (approveStep) {
+    approveStep.classList.toggle('done', isApproved);
+    approveStep.classList.toggle('current', isApproved);
+  }
+
+  payProgressStatus.textContent = isApproved ? 'Approved & scheduled' : isReturned ? 'Returned for correction' : hasEntries ? 'Review & approve' : 'Ready to calculate';
+  payProgressCount.textContent = isApproved ? '3 of 3 complete' : isReturned ? 'Needs correction' : hasEntries ? '2 of 3 complete' : '1 of 3 complete';
+}
+
+document.querySelectorAll('#employeeRows, #payslipList').forEach((root) => {
+  root.addEventListener('click', async (event) => {
+    const reviewButton = event.target.closest('.review-record');
+    if (reviewButton) {
+      openEmployeeReview(reviewButton.dataset.id);
+      return;
+    }
+
+    const downloadButton = event.target.closest('.download-slip');
+    if (downloadButton) {
+      downloadEmployeePayslip(downloadButton.dataset.id);
+      return;
+    }
+
+    const deleteButton = event.target.closest('.delete-employee');
+    if (deleteButton) {
+      await deleteEmployee(deleteButton.dataset.id);
+    }
+  });
+});
+
+async function deleteEmployee(employeeId) {
+  const employee = data.employees.find(item => item.id === employeeId);
+  if (!employee) return;
+
+  const confirmed = window.confirm(`Remove ${employee.name} from this payroll workspace?`);
+  if (!confirmed) return;
+
+  try {
+    const result = await api(`/api/employees/${encodeURIComponent(employeeId)}`, { method: 'DELETE' });
+    data.employees = data.employees.filter(item => item.id !== employeeId);
+    data.payrollEntries = data.payrollEntries.filter(entry => entry.employeeId !== employeeId);
+    data.payments = data.payments.filter(payment => payment.employeeId !== employeeId);
+    data.audits.unshift({ at: 'Just now', actor: 'Asmira Admin', action: 'Removed employee record from payroll', ref: result.deleted || employeeId });
+    render();
+    toast(`${employee.name} was removed from the payroll workspace.`);
+  } catch (err) {
+    toast(err.message);
+  }
 }
 async function load() { data = await api('/api/dashboard'); render(); }
 function showPage(id) { document.querySelectorAll('main .page').forEach(p => p.classList.add('hidden')); $(`#${id}`).classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
@@ -25,6 +115,7 @@ $('#calculationForm').addEventListener('submit', async e => { e.preventDefault()
 async function decidePayroll(decision) { try { const review = await api('/api/payroll/review', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ decision }) }); data.payrollReview = review; data.audits.unshift({ at:'Just now', actor:'Asmira Admin', action: decision === 'approved' ? 'Approved August payroll' : 'Returned August payroll for correction', ref:'PAY-2026-08' }); render(); $('#reviewDialog').close(); toast(decision === 'approved' ? 'Payroll approved and scheduled in sandbox mode.' : 'Payroll returned for correction.'); } catch (err) { toast(err.message); } }
 $('#reviewForm').addEventListener('submit', e => { e.preventDefault(); decidePayroll('approved'); });
 $('#returnPayroll').addEventListener('click', e => { e.preventDefault(); decidePayroll('returned'); });
+$('#approvePayroll').addEventListener('click', e => { e.preventDefault(); decidePayroll('approved'); });
 $('#addEmployee').onclick = () => $('#employeeDialog').showModal();
 $('#importEmployees').onclick = () => $('#importDialog').showModal();
 $('#importLink').onclick = () => $('#linkDialog').showModal();
@@ -47,5 +138,11 @@ function csvRows(text) { const rows = text.trim().split(/\r?\n/).map(line => [..
 $('#importForm').addEventListener('submit', async e => { e.preventDefault(); try { const file = $('#importFile').files[0]; const result = await api('/api/employees/import', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({employees: csvRows(await readWorkbook(file))}) }); $('#importDialog').close(); e.target.reset(); await load(); toast(`${result.added} employee records imported for review.`); } catch(err) { toast(err.message); } });
 $('#linkForm').addEventListener('submit', async e => { e.preventDefault(); try { const url = $('#spreadsheetLink').value.trim(); const response = await fetch(url); if (!response.ok) throw new Error('The spreadsheet link could not be downloaded.'); const file = new File([await response.blob()], url.split('?')[0].split('/').pop() || 'employees.csv'); const result = await api('/api/employees/import', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({employees: csvRows(await readWorkbook(file))}) }); $('#linkDialog').close(); e.target.reset(); await load(); toast(`${result.added} employee records imported from the link.`); } catch(err) { toast('Import failed. Use a public CSV/Google Sheets publish link.'); } });
 $('#payoutForm').addEventListener('submit', async e => { e.preventDefault(); try { const p = await api('/api/payouts', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({employeeId:$('#payoutEmployee').value, amount:$('#payoutAmount').value, method:$('#payoutMethod').value}) }); $('#payoutDialog').close(); data.payments.unshift(p); data.audits.unshift({at:'Just now',actor:'Asmira Admin',action:'Queued sandbox payout',ref:p.id}); render(); toast('Sandbox payout queued — no money moved.'); } catch(err) { toast(err.message); } });
-$('#downloadSlip').onclick = () => { const content = `Meta Platforms — Payslip\nAugust 2026\n\nEmployee: Alicia Reyes (EMP-1042)\nGross pay: RM9,400.00\nDeductions: RM1,728.00\nNet pay: RM7,672.00\nPay date: August 30, 2026\nPayout route: Wallet`; const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([content], {type:'text/plain'})); a.download = 'alicia-reyes-payslip-2026-08.txt'; a.click(); URL.revokeObjectURL(a.href); toast('Sample payslip downloaded.'); };
+$('#downloadSlip').onclick = () => {
+  if (!data.employees.length) {
+    toast('No employees are available to download a payslip.');
+    return;
+  }
+  downloadEmployeePayslip(data.employees[0].id);
+};
 load().catch(() => toast('Could not load the demo API.'));

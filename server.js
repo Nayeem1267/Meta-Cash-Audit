@@ -6,7 +6,7 @@ const root = path.join(__dirname, 'public');
 const port = process.env.PORT || 3000;
 const state = {
   company: 'Meta Platforms',
-  payrollReview: { status: 'Ready to review', decision: null },
+  payrollReview: { status: 'Ready for final review', decision: null },
   payrollEntries: [],
   employees: [
     { id: 'EMP-1042', name: 'Alicia Reyes', role: 'Product Designer', team: 'Design', method: 'Wallet', status: 'Active', gross: 9400 },
@@ -38,6 +38,17 @@ const server = http.createServer(async (req, res) => {
     const body = await readBody(req); const rows = Array.isArray(body.employees) ? body.employees.slice(0, 500) : [];
     const added = rows.filter(row => row.name).map((row, index) => ({ id: `EMP-${1104 + state.employees.length + index}`, name: String(row.name).slice(0, 120), role: String(row.role || 'Team member').slice(0, 120), team: String(row.team || 'Operations').slice(0, 80), method: row.method === 'Cash-out' ? 'Cash-out' : 'Wallet', status: 'Pending review', gross: Math.max(0, Number(row.gross) || 0) }));
     state.employees.push(...added); audit('Asmira Admin', `Imported ${added.length} employee record${added.length === 1 ? '' : 's'}`, 'EMPLOYEE-IMPORT'); return json(res, 201, { added: added.length, employees: added });
+  }
+  const employeeDeleteMatch = url.pathname.match(/^\/api\/employees\/([^/]+)$/);
+  if (employeeDeleteMatch && req.method === 'DELETE') {
+    const employeeId = decodeURIComponent(employeeDeleteMatch[1]);
+    const index = state.employees.findIndex(item => item.id === employeeId);
+    if (index === -1) return json(res, 404, { error: 'Employee not found' });
+    const [removed] = state.employees.splice(index, 1);
+    state.payrollEntries = state.payrollEntries.filter(entry => entry.employeeId !== employeeId);
+    state.payments = state.payments.filter(payment => payment.employeeId !== employeeId);
+    audit('Asmira Admin', 'Removed employee record from payroll', removed.id);
+    return json(res, 200, { deleted: removed.id, employee: removed });
   }
   const employeeReviewMatch = url.pathname.match(/^\/api\/employees\/([^/]+)\/review$/);
   if (employeeReviewMatch && req.method === 'POST') {
