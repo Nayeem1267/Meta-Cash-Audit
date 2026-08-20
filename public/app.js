@@ -40,7 +40,10 @@ function render() {
   $('#payrollStatus').textContent = statusText;
   $('#payrollStatusNote').textContent = review.decision === 'approved' ? 'Sandbox pay run is scheduled' : review.decision === 'returned' ? 'Changes are required before approval' : 'Final review is ready';
   $('#employeeCount').textContent = String(data.employees.length);
-  $('#employeeRows').innerHTML = data.employees.map(e => `<tr><td>${e.name}<small>${e.id} · ${e.role}</small></td><td>${e.team}</td><td>${money(e.gross)}</td><td><span class="badge ${e.status === 'Pending review' || e.status === 'Needs correction' ? 'pending' : ''}">${e.status}</span></td><td><div class="row-actions"><button class="outline review-record" data-id="${e.id}">Review</button><button class="outline download-slip" data-id="${e.id}">Download slip</button><button class="outline danger delete-employee" data-id="${e.id}">Delete</button></div></td></tr>`).join('');
+  $('#employeeRows').innerHTML = data.employees.map((e) => {
+    const computedNet = Number(e.net ?? Math.max(0, Number(e.gross || 0) - Number(e.deduction || 0)));
+    return `<tr><td>${e.name}<small>${e.id} · ${e.role}</small></td><td>${e.team}</td><td>${money(computedNet)}</td><td><span class="badge ${e.status === 'Pending review' || e.status === 'Needs correction' ? 'pending' : ''}">${e.status}</span></td><td><div class="row-actions"><button class="outline review-record" data-id="${e.id}">Review</button><button class="outline download-slip" data-id="${e.id}">Download slip</button><button class="outline danger delete-employee" data-id="${e.id}">Delete</button></div></td></tr>`;
+  }).join('');
   $('#payoutEmployee').innerHTML = data.employees.map(e => `<option value="${e.id}">${e.name} (${e.id})</option>`).join('');
   $('#auditList').innerHTML = data.audits.slice(0, 4).map(a => `<div class="activity-item"><span class="act-icon">✓</span><div><b>${a.action}</b><small>${a.actor} · ${a.at} · ${a.ref}</small></div></div>`).join('');
   $('#paymentList').className = data.payments.length ? '' : 'empty';
@@ -51,8 +54,8 @@ function render() {
 
 function payslipContent(employee) {
   const gross = Number(employee.gross || 0);
-  const deductions = Math.round(gross * 0.18);
-  const net = Math.max(0, gross - deductions);
+  const deductions = Number(employee.deduction ?? Math.round(gross * 0.18));
+  const net = Number(employee.net ?? Math.max(0, gross - deductions));
   return `Meta Platforms — Payslip\nAugust 2026\n\nEmployee: ${employee.name} (${employee.id})\nRole: ${employee.role}\nTeam: ${employee.team}\nGross pay: ${money(gross)}\nDeductions: ${money(deductions)}\nNet pay: ${money(net)}\nPay date: August 30, 2026\nPayout route: ${employee.method || 'Wallet'}`;
 }
 
@@ -141,7 +144,7 @@ $('#loginFormPage').addEventListener('submit', e => { e.preventDefault(); const 
 $('#loginForm').addEventListener('submit', e => { e.preventDefault(); const username = $('#loginUser').value.trim(); const password = $('#loginPassword').value.trim(); if (username === loginUser && password === loginPassword) { unlockDashboard(); e.target.reset(); toast('Logged in successfully.'); return; } toast('Invalid username or password.'); });
 $('#reviewBtn').onclick = () => { if (!isLoggedIn) { $('#loginPage').classList.remove('hidden'); return; } $('#reviewDialog').showModal(); };
 $('#reviewPayrollLink').onclick = () => $('#reviewDialog').showModal();
-function calculationEntries() { const saved = new Map((data.payrollEntries || []).map(row => [row.employeeId, row])); return data.employees.map(employee => ({ employeeId: employee.id, gross: saved.get(employee.id)?.gross ?? employee.gross, bonus: saved.get(employee.id)?.bonus ?? 0, deductions: saved.get(employee.id)?.deductions ?? 0 })); }
+function calculationEntries() { const saved = new Map((data.payrollEntries || []).map(row => [row.employeeId, row])); return data.employees.map(employee => ({ employeeId: employee.id, gross: saved.get(employee.id)?.gross ?? employee.gross ?? 0, bonus: saved.get(employee.id)?.bonus ?? 0, deductions: saved.get(employee.id)?.deductions ?? employee.deduction ?? 0 })); }
 function refreshCalculation() { const entries = [...$('#calculationRows').querySelectorAll('tr')]; let total = 0; entries.forEach(row => { const values = [...row.querySelectorAll('input')].map(input => Number(input.value) || 0); const net = Math.max(0, values[0] + values[1] - values[2]); row.querySelector('.calc-net').textContent = money(net); total += net; }); $('#calculationTotal').textContent = money(total); }
 function openCalculation() { const entries = calculationEntries(); $('#calculationRows').innerHTML = entries.map(row => { const employee = data.employees.find(item => item.id === row.employeeId); return `<tr data-id="${row.employeeId}"><td>${employee?.name || row.employeeId}</td><td><input type="number" min="0" value="${row.gross}"></td><td><input type="number" min="0" value="${row.bonus}"></td><td><input type="number" min="0" value="${row.deductions}"></td><td class="calc-net"></td></tr>`; }).join(''); $('#calculationRows').querySelectorAll('input').forEach(input => input.addEventListener('input', refreshCalculation)); refreshCalculation(); $('#payrollDialog').showModal(); }
 $('#openPayroll').onclick = openCalculation;
@@ -168,7 +171,20 @@ async function readWorkbook(file) {
   for (let i = 0; i < count; i++) { if (view.getUint32(pos, true) !== 0x02014b50) break; const method = view.getUint16(pos + 10, true), size = view.getUint32(pos + 20, true), nameLen = view.getUint16(pos + 28, true), extraLen = view.getUint16(pos + 30, true), commentLen = view.getUint16(pos + 32, true), local = view.getUint32(pos + 42, true), name = new TextDecoder().decode(bytes.slice(pos + 46, pos + 46 + nameLen)), localNameLen = view.getUint16(local + 26, true), localExtraLen = view.getUint16(local + 28, true); let content = bytes.slice(local + 30 + localNameLen + localExtraLen, local + 30 + localNameLen + localExtraLen + size); if (method === 8) content = new Uint8Array(await new Response(new Blob([content]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer()); files[name] = new TextDecoder().decode(content); pos += 46 + nameLen + extraLen + commentLen; }
   const shared = [...new DOMParser().parseFromString(files['xl/sharedStrings.xml'] || '<sst/>', 'text/xml').querySelectorAll('si')].map(si => si.textContent || ''); const sheetName = Object.keys(files).find(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)); if (!sheetName) throw new Error('No worksheet was found in this file.'); const rows = [...new DOMParser().parseFromString(files[sheetName], 'text/xml').querySelectorAll('row')].map(row => [...row.querySelectorAll('c')].map(c => c.getAttribute('t') === 's' ? shared[Number(c.querySelector('v')?.textContent)] : (c.querySelector('is')?.textContent || c.querySelector('v')?.textContent || ''))); return rows.map(r => r.map(v => String(v).replaceAll('"', '""')).map(v => `"${v}"`).join(',')).join('\n');
 }
-function csvRows(text) { const rows = text.trim().split(/\r?\n/).map(line => [...line.matchAll(/(?:^|,)(?:"((?:[^"]|"")*)"|([^",]*))/g)].map(m => (m[1] ?? m[2]).replaceAll('""','"').trim())); const [headers, ...values] = rows; const key = h => headers.findIndex(x => x.toLowerCase().replace(/[^a-z]/g,'') === h); return values.map(r => ({ name:r[key('name')], role:r[key('role')] || r[key('jobtitle')], team:r[key('team')] || r[key('department')], gross:r[key('monthlygross')] || r[key('gross')] || r[key('salary')], method:r[key('paymentroute')] })).filter(r => r.name); }
+function csvRows(text) {
+  const rows = text.trim().split(/\r?\n/).map(line => [...line.matchAll(/(?:^|,)(?:"((?:[^"]|"")*)"|([^",]*))/g)].map(m => (m[1] ?? m[2]).replaceAll('""','"').trim()));
+  const [headers, ...values] = rows;
+  const key = h => headers.findIndex(x => x.toLowerCase().replace(/[^a-z]/g,'') === h);
+  return values.map((r) => ({
+    name: r[key('name')],
+    role: r[key('role')] || r[key('jobtitle')],
+    team: r[key('team')] || r[key('department')],
+    gross: r[key('monthlygross')] || r[key('gross')] || r[key('salary')] || r[key('grosspay')],
+    deduction: r[key('deduction')] || r[key('deductions')] || r[key('totaldeduction')] || r[key('totaldeductions')],
+    net: r[key('net')] || r[key('netpay')] || r[key('finalnet')] || r[key('netsalary')],
+    method: r[key('paymentroute')] || r[key('paymentmethod')]
+  })).filter(r => r.name);
+}
 $('#importForm').addEventListener('submit', async e => { e.preventDefault(); try { const file = $('#importFile').files[0]; const result = await api('/api/employees/import', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({employees: csvRows(await readWorkbook(file))}) }); $('#importDialog').close(); e.target.reset(); await load(); toast(`${result.added} employee records imported for review.`); } catch(err) { toast(err.message); } });
 $('#linkForm').addEventListener('submit', async e => { e.preventDefault(); try { const url = $('#spreadsheetLink').value.trim(); const response = await fetch(url); if (!response.ok) throw new Error('The spreadsheet link could not be downloaded.'); const file = new File([await response.blob()], url.split('?')[0].split('/').pop() || 'employees.csv'); const result = await api('/api/employees/import', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({employees: csvRows(await readWorkbook(file))}) }); $('#linkDialog').close(); e.target.reset(); await load(); toast(`${result.added} employee records imported from the link.`); } catch(err) { toast('Import failed. Use a public CSV/Google Sheets publish link.'); } });
 $('#payoutForm').addEventListener('submit', async e => { e.preventDefault(); try { const p = await api('/api/payouts', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({employeeId:$('#payoutEmployee').value, amount:$('#payoutAmount').value, method:$('#payoutMethod').value}) }); $('#payoutDialog').close(); data.payments.unshift(p); data.audits.unshift({at:'Just now',actor:'Asmira Admin',action:'Queued sandbox payout',ref:p.id}); render(); toast('Sandbox payout queued — no money moved.'); } catch(err) { toast(err.message); } });

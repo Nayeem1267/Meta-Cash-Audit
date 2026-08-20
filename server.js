@@ -17,6 +17,20 @@ const state = {
   payments: []
 };
 
+function toNumber(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  const cleaned = String(value).replace(/[RM$,%\s]/gi, '').replace(/,/g, '');
+  const numeric = Number(cleaned);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+function normalizeEmployeePay(row) {
+  const gross = Math.max(0, toNumber(row.gross ?? row.monthlygross ?? row.salary ?? row.grosspay ?? 0));
+  const deduction = Math.max(0, toNumber(row.deduction ?? row.deductions ?? row.totaldeduction ?? row.totaldeductions ?? row.subtract ?? 0));
+  const netValue = toNumber(row.net ?? row.netpay ?? row.finalnet ?? row.netPay ?? row.totalnet ?? 0);
+  const net = netValue > 0 ? netValue : Math.max(0, gross - deduction);
+  const resolvedDeduction = deduction > 0 ? deduction : Math.max(0, gross - net);
+  return { gross, deduction: resolvedDeduction, net };
+}
 function json(res, status, body) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); }
 function readBody(req) { return new Promise((resolve) => { let data = ''; req.on('data', c => data += c); req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { resolve({}); } }); }); }
 function audit(actor, action, ref) { state.audits.unshift({ at: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }), actor, action, ref }); }
@@ -26,12 +40,25 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === '/api/health') return json(res, 200, { status: 'ok', environment: process.env.PAYMENT_MODE || 'sandbox' });
   if (url.pathname === '/api/dashboard') return json(res, 200, { company: state.company, employees: state.employees, audits: state.audits, payments: state.payments, payrollReview: state.payrollReview, payrollEntries: state.payrollEntries });
   if (url.pathname === '/api/employees' && req.method === 'POST') {
-    const body = await readBody(req); const employee = { id: `EMP-${1104 + state.employees.length}`, name: body.name || 'New employee', role: body.role || 'Team member', team: body.team || 'Operations', method: body.method || 'Wallet', status: 'Pending review', gross: Number(body.gross) || 0 };
+    const body = await readBody(req); const pay = normalizeEmployeePay(body); const employee = { id: `EMP-${1104 + state.employees.length}`, name: body.name || 'New employee', role: body.role || 'Team member', team: body.team || 'Operations', method: body.method || 'Wallet', status: 'Pending review', gross: pay.gross, deduction: pay.deduction, net: pay.net };
     state.employees.push(employee); audit('Asmira Admin', 'Created employee record', employee.id); return json(res, 201, employee);
   }
   if (url.pathname === '/api/employees/import' && req.method === 'POST') {
     const body = await readBody(req); const rows = Array.isArray(body.employees) ? body.employees.slice(0, 500) : [];
-    const added = rows.filter(row => row.name).map((row, index) => ({ id: `EMP-${1104 + state.employees.length + index}`, name: String(row.name).slice(0, 120), role: String(row.role || 'Team member').slice(0, 120), team: String(row.team || 'Operations').slice(0, 80), method: row.method === 'Cash-out' ? 'Cash-out' : 'Wallet', status: 'Pending review', gross: Math.max(0, Number(row.gross) || 0) }));
+    const added = rows.filter(row => row.name).map((row, index) => {
+      const pay = normalizeEmployeePay(row);
+      return {
+        id: `EMP-${1104 + state.employees.length + index}`,
+        name: String(row.name).slice(0, 120),
+        role: String(row.role || 'Team member').slice(0, 120),
+        team: String(row.team || 'Operations').slice(0, 80),
+        method: row.method === 'Cash-out' ? 'Cash-out' : 'Wallet',
+        status: 'Pending review',
+        gross: pay.gross,
+        deduction: pay.deduction,
+        net: pay.net
+      };
+    });
     state.employees.push(...added); audit('Asmira Admin', `Imported ${added.length} employee record${added.length === 1 ? '' : 's'}`, 'EMPLOYEE-IMPORT'); return json(res, 201, { added: added.length, employees: added });
   }
   const employeeDeleteMatch = url.pathname.match(/^\/api\/employees\/([^/]+)$/);
