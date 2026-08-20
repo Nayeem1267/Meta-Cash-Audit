@@ -8,12 +8,7 @@ const state = {
   company: 'Meta Platforms',
   payrollReview: { status: 'Ready for final review', decision: null },
   payrollEntries: [],
-  employees: [
-    { id: 'EMP-1042', name: 'Alicia Reyes', role: 'Product Designer', team: 'Design', method: 'Wallet', status: 'Active', gross: 9400 },
-    { id: 'EMP-1018', name: 'Marcus Chen', role: 'Software Engineer', team: 'Engineering', method: 'Wallet', status: 'Active', gross: 12800 },
-    { id: 'EMP-1091', name: 'Priya Nair', role: 'People Operations', team: 'People', method: 'Cash-out', status: 'Active', gross: 8100 },
-    { id: 'EMP-1103', name: 'Jon Bell', role: 'Data Analyst', team: 'Finance', method: 'Wallet', status: 'Pending review', gross: 7650 }
-  ],
+  employees: [],
   audits: [
     { at: 'Today, 09:42', actor: 'Nora Admin', action: 'Approved August payroll', ref: 'PAY-2026-08' },
     { at: 'Today, 09:18', actor: 'Finance Reviewer', action: 'Updated salary structure', ref: 'EMP-1042' },
